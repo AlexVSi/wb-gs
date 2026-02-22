@@ -1,0 +1,80 @@
+networks:
+  postgres-net:
+    driver: bridge
+
+volumes:
+  postgres-vol:
+    driver: local
+
+services:
+
+  postgres:
+    container_name: postgres
+
+    image: postgres:16.1-alpine
+    env_file:
+       - .env
+
+    environment:
+      - PGPORT=${DATABASE_PORT}
+      - POSTGRES_DB=${DATABASE_NAME}
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+
+    volumes:
+      - postgres-vol:/var/lib/postgresql/data
+
+    networks:
+      - postgres-net
+
+    expose:
+      - ${DATABASE_PORT}
+
+    ports:
+      - ${DATABASE_PORT}:${DATABASE_PORT}
+
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    restart: unless-stopped
+
+
+  app:
+    container_name: app
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${DATABASE_PORT}
+      POSTGRES_DB: ${DATABASE_HOST}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      PORT: ${DATABASE_PORT}
+      NODE_ENV: production
+
+    ports:
+      - ${PORT}:${PORT}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - postgres-net
+
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 5
+
+    restart: unless-stopped
